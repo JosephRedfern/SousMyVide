@@ -1,10 +1,14 @@
-
+#include <ESPAsyncWebServer.h>
+#include "AsyncJson.h"
+#include "ArduinoJson.h"
 #include "SPI.h"
 #include "Adafruit_GFX.h"
 #include "WROVER_KIT_LCD.h"
+#include "WiFi.h"
 #include "math.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "Credentials.h"
 
 // Define pins for button, relay and temp sensor
 const int BUTTON = 2;
@@ -12,8 +16,8 @@ const int RELAY = 14;
 const int TEMP_SENSOR = 4;
 
 // Define update frequency for LCD, Temp and Button polling/refresh
-const int lcdUpdateRate = 500;
-const int tempUpdateRate = 500;
+const int lcdUpdateRate = 1000;
+const int tempUpdateRate = 1000;
 const int buttonUpdateRate = 50;
 
 // Define min and max for temp setting.
@@ -21,19 +25,19 @@ const float maxTemp = 90;
 const float minTemp = 40;
 
 // Step side for temp increase
-const float stepSize = 5;
+const float stepSize = 2;
 
 unsigned long lastTempMillis = 0;
 unsigned long lastLcdMillis = 0;
 unsigned long lastButtonMillis = 0;
 
-
 bool socketOn = true;
 float currentTemp = 0;
-float targetTemp = 40;
+float targetTemp = 56;
 
 OneWire oneWire(TEMP_SENSOR);
 DallasTemperature sensors(&oneWire);
+AsyncWebServer server(WEBSERVER_PORT);
 WROVER_KIT_LCD tft;
 
 void setup() {
@@ -45,6 +49,22 @@ void setup() {
 
   // Make sure relay is LOW.
   digitalWrite(RELAY, LOW);
+
+  //Set up wifi and block until connected
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  //WiFi.begin("VM5342485", WIFI_PASSWORD);
+  
+  while(WiFi.status() != WL_CONNECTED){
+    delay(100);
+    Serial.print(".");
+  }
+
+  Serial.println("Done!");
+  Serial.println("IP address: " + WiFi.localIP().toString());
+
+  server.on("/status", HTTP_ANY, getStatus);
+  server.begin();
 
   tft.begin();
   tft.setRotation(1);
@@ -92,6 +112,19 @@ void loop(void) {
 
 }
 
+void getStatus(AsyncWebServerRequest *request){
+  AsyncResponseStream *response = request->beginResponseStream("text/json");
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject &root = jsonBuffer.createObject();
+  root["time"] = millis();
+  root["freeHeap"] = ESP.getFreeHeap();
+  root["socketStatus"] = socketOn;
+  root["targetTemperature"] = targetTemp;
+  root["currentTemperature"] = currentTemp;
+  root.printTo(*response);
+  request->send(response);
+}
+
 float readTemp() {
   sensors.requestTemperatures(); 
   return sensors.getTempCByIndex(0);
@@ -126,6 +159,7 @@ void showTemp(float temp) {
   tft.setTextColor(WROVER_WHITE);
   tft.setTextSize(1);
   tft.setCursor(0, 25);
+  tft.println("IP Address:" + WiFi.localIP().toString());
   tft.printf("Target Temp:  %.2f *c (%.2f *c diff)\n", targetTemp, temp - targetTemp);
 
   int colour = WROVER_GREEN;
@@ -139,6 +173,6 @@ void showTemp(float temp) {
   tft.setTextColor(colour);
   tft.setTextSize(5);
 
-  tft.setCursor(0, 50);
+  tft.setCursor(0, 60);
   tft.printf("%.2f *c", temp);
 }
