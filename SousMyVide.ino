@@ -32,8 +32,8 @@ unsigned long lastLcdMillis = 0;
 unsigned long lastButtonMillis = 0;
 
 bool socketOn = true;
-float currentTemp = 0;
-float targetTemp = 56;
+double currentTemp = 0;
+double targetTemp = 56;
 
 OneWire oneWire(TEMP_SENSOR);
 DallasTemperature sensors(&oneWire);
@@ -161,6 +161,7 @@ void showTemp(float temp) {
   tft.setCursor(0, 25);
   tft.println("IP Address:" + WiFi.localIP().toString());
   tft.printf("Target Temp:  %.2f *c (%.2f *c diff)\n", targetTemp, temp - targetTemp);
+  tft.printf("Socket: %s", socketOn ? "on" : "off");
 
   int colour = WROVER_GREEN;
 
